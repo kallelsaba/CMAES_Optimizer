@@ -1,0 +1,655 @@
+\documentclass[12pt,a4paper]{article}
+
+% ============================================================================
+% PACKAGES
+% ============================================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+% ============================================================================
+% CONFIGURATION
+% ============================================================================
+\geometry{margin=2.5cm}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    urlcolor=blue!70!black,
+    citecolor=green!50!black
+}
+
+% Couleurs personnalisées
+\definecolor{cmaesblue}{RGB}{79, 70, 229}
+\definecolor{cmaesgreen}{RGB}{34, 197, 94}
+\definecolor{cmaesorange}{RGB}{249, 115, 22}
+
+% Boîtes colorées
+\newtcolorbox{definitionbox}[1][]{
+    colback=blue!5,
+    colframe=cmaesblue,
+    fonttitle=\bfseries,
+    title=#1
+}
+
+\newtcolorbox{importantbox}[1][]{
+    colback=green!5,
+    colframe=cmaesgreen,
+    fonttitle=\bfseries,
+    title=#1
+}
+
+\newtcolorbox{exemplebox}[1][]{
+    colback=orange!5,
+    colframe=cmaesorange,
+    fonttitle=\bfseries,
+    title=#1
+}
+
+% En-tête et pied de page
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textcolor{gray}{CMA-ES : Guide Complet}}
+\fancyhead[R]{\textcolor{gray}{\thepage}}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ============================================================================
+% DOCUMENT
+% ============================================================================
+\begin{document}
+
+% Page de titre
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\Huge\bfseries\textcolor{cmaesblue}{CMA-ES}\par}
+    \vspace{0.5cm}
+    {\Large\textcolor{gray}{Covariance Matrix Adaptation Evolution Strategy}\par}
+    
+    \vspace{2cm}
+    
+    {\LARGE Guide Complet et Simplifié\par}
+    
+    \vspace{1cm}
+    
+    {\large\textit{Comprendre l'optimisation continue sans gradient}\par}
+    
+    \vspace{3cm}
+    
+    \begin{tcolorbox}[colback=blue!5, colframe=cmaesblue, width=0.8\textwidth]
+        \centering
+        \textbf{Projet Académique}\\[0.3cm]
+        Méthodes Heuristiques et Métaheuristiques\\[0.5cm]
+        \textbf{Équipe :}\\
+        Eya Zouch $\bullet$ Oumayma Khlif $\bullet$ Saba Kallel
+    \end{tcolorbox}
+    
+    \vfill
+    
+    {\large 2024-2025\par}
+\end{titlepage}
+
+% Table des matières
+\tableofcontents
+\newpage
+
+% ============================================================================
+% INTRODUCTION
+% ============================================================================
+\section{Introduction : C'est quoi l'optimisation ?}
+
+\subsection{Le problème de base}
+
+Imaginez que vous cherchez le \textbf{point le plus bas} d'une montagne, mais :
+\begin{itemize}
+    \item Vous êtes dans le \textbf{brouillard} (vous ne voyez pas loin)
+    \item Vous n'avez \textbf{pas de carte} (pas de formule mathématique)
+    \item Vous pouvez seulement \textbf{mesurer l'altitude} où vous êtes
+\end{itemize}
+
+\begin{definitionbox}[Optimisation]
+L'optimisation consiste à trouver la \textbf{meilleure solution} (minimum ou maximum) d'un problème, souvent sans connaître la formule exacte de la fonction.
+\end{definitionbox}
+
+\subsection{Pourquoi c'est difficile ?}
+
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Difficulté} & \textbf{Explication simple} \\
+\hline
+Haute dimension & Chercher dans un espace à 30, 100 ou 1000 variables \\
+Minima locaux & Des "faux" minimums qui piègent l'algorithme \\
+Pas de gradient & Impossible de savoir "dans quelle direction descendre" \\
+Bruit & Les mesures peuvent être imprécises \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Les familles d'algorithmes}
+
+\begin{importantbox}[Types d'algorithmes d'optimisation]
+\begin{enumerate}
+    \item \textbf{Méthodes exactes} : Trouvent LA solution optimale (mais très lentes)
+    \item \textbf{Méthodes à gradient} : Utilisent la pente (mais besoin de la dérivée)
+    \item \textbf{Métaheuristiques} : Inspirées de la nature, robustes mais approximatives
+\end{enumerate}
+\end{importantbox}
+
+CMA-ES appartient à la famille des \textbf{métaheuristiques évolutionnaires}.
+
+% ============================================================================
+% QU'EST-CE QUE CMA-ES ?
+% ============================================================================
+\newpage
+\section{Qu'est-ce que CMA-ES ?}
+
+\subsection{Définition simple}
+
+\begin{definitionbox}[CMA-ES en une phrase]
+\textbf{CMA-ES} = Un algorithme qui \textbf{apprend la forme du paysage} pour mieux chercher la solution optimale.
+\end{definitionbox}
+
+\textbf{CMA-ES} signifie :
+\begin{itemize}
+    \item \textbf{C}ovariance \textbf{M}atrix \textbf{A}daptation : Adaptation de la matrice de covariance
+    \item \textbf{E}volution \textbf{S}trategy : Stratégie d'évolution
+\end{itemize}
+
+\subsection{L'idée géniale}
+
+Imaginez que vous lancez des \textbf{fléchettes} pour trouver le centre d'une cible :
+
+\begin{enumerate}
+    \item Au début, vous lancez dans \textbf{toutes les directions} (exploration)
+    \item Vous notez où les fléchettes \textbf{atterrissent le mieux}
+    \item Vous \textbf{ajustez votre lancer} vers cette zone
+    \item Vous \textbf{réduisez la dispersion} pour être plus précis
+    \item Vous répétez jusqu'à toucher le centre !
+\end{enumerate}
+
+\begin{importantbox}[Ce qui rend CMA-ES spécial]
+CMA-ES ne lance pas ses fléchettes en cercle, mais en \textbf{ellipse orientée} qui s'adapte à la forme du problème !
+\end{importantbox}
+
+\subsection{Comparaison visuelle}
+
+\begin{center}
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Méthode} & \textbf{Forme de recherche} & \textbf{Adaptation} \\
+\hline
+Recherche aléatoire & Cercle fixe & Aucune \\
+Algorithme génétique & Rectangulaire & Limitée \\
+PSO & Vers le meilleur & Partielle \\
+\textbf{CMA-ES} & \textbf{Ellipse orientée} & \textbf{Complète} \\
+\hline
+\end{tabular}
+\end{center}
+
+% ============================================================================
+% LES 3 COMPOSANTES CLÉS
+% ============================================================================
+\newpage
+\section{Les 3 Composantes Clés de CMA-ES}
+
+CMA-ES utilise une \textbf{distribution gaussienne} (courbe en cloche) pour générer des solutions. Cette distribution est définie par 3 éléments :
+
+\subsection{1. La Moyenne $m$ : "Où chercher ?"}
+
+\begin{definitionbox}[Moyenne $m$]
+Le \textbf{centre} de la zone de recherche. C'est là où l'algorithme pense que se trouve la solution.
+\end{definitionbox}
+
+\begin{itemize}
+    \item Au début : position aléatoire
+    \item À chaque itération : se déplace vers les \textbf{meilleures solutions} trouvées
+    \item À la fin : converge vers l'optimum
+\end{itemize}
+
+\textbf{Formule de mise à jour :}
+\[
+m \leftarrow \sum_{i=1}^{\mu} w_i \cdot x_{i:\lambda}
+\]
+
+Où :
+\begin{itemize}
+    \item $x_{i:\lambda}$ = les $\mu$ meilleures solutions parmi $\lambda$ générées
+    \item $w_i$ = poids (les meilleurs ont plus d'importance)
+\end{itemize}
+
+\subsection{2. Le Step-size $\sigma$ : "Quelle distance ?"}
+
+\begin{definitionbox}[Step-size $\sigma$]
+La \textbf{taille du pas} de recherche. Contrôle jusqu'où l'algorithme peut explorer.
+\end{definitionbox}
+
+\begin{center}
+\begin{tabular}{|c|l|l|}
+\hline
+\textbf{$\sigma$} & \textbf{Comportement} & \textbf{Phase} \\
+\hline
+Grand & Explore loin & Début (exploration) \\
+Petit & Cherche près & Fin (exploitation) \\
+\hline
+\end{tabular}
+\end{center}
+
+\textbf{Valeur initiale recommandée :} $\sigma_0 = \frac{\text{taille du domaine}}{3}$
+
+Pour un domaine $[-100, 100]$ : $\sigma_0 = \frac{200}{3} \approx 66.7$
+
+\subsection{3. La Matrice de Covariance $C$ : "Quelle forme ?"}
+
+\begin{definitionbox}[Matrice de Covariance $C$]
+La \textbf{forme et orientation} de l'ellipse de recherche. C'est le "secret" de CMA-ES !
+\end{definitionbox}
+
+\begin{itemize}
+    \item \textbf{Matrice identité} $C = I$ : cercle (toutes directions égales)
+    \item \textbf{Matrice adaptée} : ellipse orientée vers les bonnes directions
+\end{itemize}
+
+\begin{importantbox}[Pourquoi c'est puissant ?]
+La matrice $C$ capture les \textbf{corrélations entre variables}. Si les bonnes solutions ont tendance à avoir $x_1$ et $x_2$ qui varient ensemble, $C$ l'apprend automatiquement !
+\end{importantbox}
+
+% ============================================================================
+% FONCTIONNEMENT DE L'ALGORITHME
+% ============================================================================
+\newpage
+\section{Fonctionnement de l'Algorithme}
+
+\subsection{Le cycle de CMA-ES}
+
+\begin{algorithm}[H]
+\caption{CMA-ES simplifié}
+\begin{algorithmic}[1]
+\State \textbf{Initialiser} : $m$ (centre), $\sigma$ (pas), $C = I$ (matrice identité)
+\While{critère d'arrêt non atteint}
+    \State \textbf{Générer} $\lambda$ solutions autour de $m$ selon $\mathcal{N}(m, \sigma^2 C)$
+    \State \textbf{Évaluer} chaque solution (calculer sa fitness)
+    \State \textbf{Sélectionner} les $\mu$ meilleures solutions
+    \State \textbf{Mettre à jour} $m$ (nouvelle moyenne pondérée)
+    \State \textbf{Adapter} $\sigma$ (agrandir ou réduire le pas)
+    \State \textbf{Adapter} $C$ (orienter l'ellipse)
+\EndWhile
+\State \textbf{Retourner} la meilleure solution trouvée
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Étape par étape}
+
+\subsubsection{Étape 1 : Génération de la population}
+
+On génère $\lambda$ nouvelles solutions :
+\[
+x_k = m + \sigma \cdot \mathcal{N}(0, C) \quad \text{pour } k = 1, \ldots, \lambda
+\]
+
+\textbf{En français :} Chaque solution est le centre $m$ + un pas aléatoire de taille $\sigma$ dans une direction déterminée par $C$.
+
+\subsubsection{Étape 2 : Évaluation et sélection}
+
+\begin{enumerate}
+    \item Calculer $f(x_k)$ pour chaque solution (fitness)
+    \item Trier les solutions du meilleur au pire
+    \item Garder les $\mu$ meilleures (environ $\lambda/2$)
+\end{enumerate}
+
+\subsubsection{Étape 3 : Mise à jour de la moyenne}
+
+\[
+m \leftarrow \sum_{i=1}^{\mu} w_i \cdot x_{i:\lambda}
+\]
+
+Les poids $w_i$ sont décroissants : la meilleure solution a plus d'importance.
+
+\subsubsection{Étape 4 : Adaptation de $\sigma$ (CSA)}
+
+\begin{definitionbox}[CSA = Cumulative Step-size Adaptation]
+Mécanisme qui ajuste $\sigma$ automatiquement :
+\begin{itemize}
+    \item Si on progresse bien $\rightarrow$ augmenter $\sigma$ (explorer plus)
+    \item Si on stagne $\rightarrow$ réduire $\sigma$ (affiner la recherche)
+\end{itemize}
+\end{definitionbox}
+
+\subsubsection{Étape 5 : Adaptation de $C$ (CMA)}
+
+La matrice $C$ est mise à jour pour :
+\begin{itemize}
+    \item S'orienter vers les \textbf{directions prometteuses}
+    \item Étirer l'ellipse dans les directions qui fonctionnent
+    \item Comprimer dans les directions inutiles
+\end{itemize}
+
+% ============================================================================
+% LES PARAMÈTRES
+% ============================================================================
+\newpage
+\section{Les Paramètres de CMA-ES}
+
+\subsection{Paramètres principaux}
+
+\begin{center}
+\begin{tabular}{|c|l|l|}
+\hline
+\textbf{Symbole} & \textbf{Nom} & \textbf{Valeur typique (n=30)} \\
+\hline
+$\lambda$ & Taille population & $4 + \lfloor 3 \ln(n) \rfloor \approx 14$ \\
+$\mu$ & Nombre de parents & $\lambda / 2 \approx 7$ \\
+$\sigma_0$ & Step-size initial & $\text{domaine} / 3 \approx 66.7$ \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Paramètres d'adaptation (auto-calculés)}
+
+\begin{center}
+\begin{tabular}{|c|l|l|}
+\hline
+\textbf{Symbole} & \textbf{Rôle} & \textbf{Formule} \\
+\hline
+$c_c$ & Cumulation pour $C$ & $\frac{4 + \mu_{eff}/n}{n + 4 + 2\mu_{eff}/n}$ \\
+$c_s$ & Cumulation pour $\sigma$ & $\frac{\mu_{eff} + 2}{n + \mu_{eff} + 5}$ \\
+$c_1$ & Mise à jour rang-1 & $\frac{2}{(n+1.3)^2 + \mu_{eff}}$ \\
+$c_\mu$ & Mise à jour rang-$\mu$ & $\min\left(1-c_1, \frac{2(\mu_{eff}-2+1/\mu_{eff})}{(n+2)^2+\mu_{eff}}\right)$ \\
+$d_\sigma$ & Damping pour $\sigma$ & $1 + 2\max(0, \sqrt{\frac{\mu_{eff}-1}{n+1}}-1) + c_s$ \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{importantbox}[Bonne nouvelle !]
+Tous ces paramètres sont \textbf{calculés automatiquement} à partir de $n$ (dimension) et $\lambda$ (population). Pas besoin de les régler manuellement !
+\end{importantbox}
+
+\subsection{Variance effective $\mu_{eff}$}
+
+\[
+\mu_{eff} = \frac{1}{\sum_{i=1}^{\mu} w_i^2}
+\]
+
+Mesure le "nombre effectif de parents". Plus les poids sont équilibrés, plus $\mu_{eff}$ est grand.
+
+% ============================================================================
+% BENCHMARK CEC2017
+% ============================================================================
+\newpage
+\section{Le Benchmark CEC2017}
+
+\subsection{C'est quoi un benchmark ?}
+
+\begin{definitionbox}[Benchmark]
+Un \textbf{ensemble de fonctions de test standardisées} pour comparer équitablement les algorithmes d'optimisation.
+\end{definitionbox}
+
+\textbf{Analogie :} C'est comme un examen avec les mêmes questions pour tous les étudiants (algorithmes) !
+
+\subsection{Pourquoi CEC2017 ?}
+
+\begin{itemize}
+    \item \textbf{Standard international} : Utilisé dans les compétitions scientifiques
+    \item \textbf{30 fonctions} : Du facile au très difficile
+    \item \textbf{Réaliste} : Simule des problèmes réels (rotations, décalages, bruit)
+    \item \textbf{Reproductible} : Mêmes conditions pour tous
+\end{itemize}
+
+\subsection{Les 4 catégories de fonctions}
+
+\begin{center}
+\begin{tabular}{|c|l|l|c|}
+\hline
+\textbf{Fonctions} & \textbf{Type} & \textbf{Difficulté} & \textbf{Caractéristique} \\
+\hline
+F1 - F3 & Unimodales & Facile & 1 seul minimum \\
+F4 - F10 & Multimodales & Moyen & Plusieurs minima locaux \\
+F11 - F20 & Hybrides & Difficile & Mélange de propriétés \\
+F21 - F30 & Composées & Très difficile & Combinaison complexe \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Conditions expérimentales}
+
+Pour notre projet, nous utilisons les paramètres standards :
+
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Paramètre} & \textbf{Valeur} \\
+\hline
+Dimension $n$ & 30 \\
+Domaine de recherche & $[-100, 100]^n$ \\
+Max évaluations & $10000 \times n = 30000$ \\
+Nombre de runs & 30 (pour la statistique) \\
+Métriques & Moyenne et Écart-type \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Comment interpréter les résultats ?}
+
+\begin{itemize}
+    \item \textbf{Erreur} = $f(x_{best}) - f(x^*)$ où $x^*$ est l'optimum connu
+    \item \textbf{Plus l'erreur est petite}, meilleur est l'algorithme
+    \item \textbf{Écart-type faible} = algorithme stable et reproductible
+\end{itemize}
+
+% ============================================================================
+% POURQUOI CMA-ES EST SUPÉRIEUR
+% ============================================================================
+\newpage
+\section{Pourquoi CMA-ES est Supérieur ?}
+
+\subsection{Comparaison avec d'autres algorithmes}
+
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Critère} & \textbf{GA} & \textbf{PSO} & \textbf{DE} & \textbf{CMA-ES} \\
+\hline
+Auto-adaptation & Non & Partielle & Non & \textbf{Complète} \\
+Haute dimension & Moyen & Moyen & Bon & \textbf{Excellent} \\
+Fonctions multimodales & Moyen & Bon & Bon & \textbf{Excellent} \\
+Convergence finale & Linéaire & Linéaire & Linéaire & \textbf{Superlinéaire} \\
+Paramètres à régler & Beaucoup & Moyen & Quelques & \textbf{Aucun} \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Les 3 avantages majeurs}
+
+\begin{importantbox}[1. Auto-adaptation complète]
+CMA-ES adapte \textbf{automatiquement} :
+\begin{itemize}
+    \item La direction de recherche (via $C$)
+    \item La taille du pas (via $\sigma$)
+    \item L'équilibre exploration/exploitation
+\end{itemize}
+Les autres algorithmes nécessitent un réglage manuel !
+\end{importantbox}
+
+\begin{importantbox}[2. Convergence superlinéaire]
+En fin d'optimisation, CMA-ES \textbf{accélère} vers l'optimum grâce à l'adaptation de $C$. Les autres algorithmes gardent une vitesse constante ou ralentissent.
+\end{importantbox}
+
+\begin{importantbox}[3. Robustesse en haute dimension]
+La matrice $C$ capture les \textbf{dépendances entre variables}, ce qui est crucial quand $n > 10$.
+\end{importantbox}
+
+\subsection{Résultats typiques sur CEC2017}
+
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Catégorie} & \textbf{GA} & \textbf{PSO} & \textbf{DE} & \textbf{CMA-ES} \\
+\hline
+Unimodales (F1-F3) & $10^1$ & $10^0$ & $10^{-1}$ & $\mathbf{10^{-5}}$ \\
+Multimodales (F4-F10) & $10^3$ & $10^2$ & $10^1$ & $\mathbf{10^{-2}}$ \\
+Hybrides (F11-F20) & $10^4$ & $10^3$ & $10^2$ & $\mathbf{10^{0}}$ \\
+Composées (F21-F30) & $10^4$ & $10^3$ & $10^2$ & $\mathbf{10^{1}}$ \\
+\hline
+\end{tabular}
+\end{center}
+
+\textit{Valeurs = erreur moyenne typique (ordre de grandeur)}
+
+% ============================================================================
+% IMPLÉMENTATION
+% ============================================================================
+\newpage
+\section{Notre Implémentation}
+
+\subsection{Structure du projet}
+
+\begin{verbatim}
+cmaes-optimizer/
+├── app.py                    # Page d'accueil Streamlit
+├── algorithm/
+│   └── cmaes.py              # Implémentation CMA-ES
+├── benchmark/
+│   └── cec2017.py            # Fonctions CEC2017
+└── pages/
+    ├── 1_Optimisation.py     # Optimisation interactive
+    ├── 2_Fonctions_3D.py     # Visualisation 3D
+    ├── 3_Comparaison.py      # Comparaison algorithmes
+    ├── 4_Topologies.py       # Gbest vs Lbest vs CMA-ES
+    └── 5_Benchmark.py        # Résultats benchmark
+\end{verbatim}
+
+\subsection{Classe CMAES}
+
+Notre implémentation suit l'algorithme standard de Hansen :
+
+\begin{verbatim}
+class CMAES:
+    def __init__(self, dim=30, bounds=[-100,100], max_eval=30000):
+        self.mean = ...      # Centre m
+        self.sigma = ...     # Step-size σ
+        self.C = np.eye(dim) # Matrice de covariance
+        
+    def ask(self):
+        # Génère λ nouvelles solutions
+        return solutions
+        
+    def tell(self, solutions, fitness):
+        # Met à jour m, σ, C selon les résultats
+        
+    def optimize(self, f):
+        # Boucle principale
+        while evals < max_eval:
+            solutions = self.ask()
+            fitness = [f(x) for x in solutions]
+            self.tell(solutions, fitness)
+        return best_solution
+\end{verbatim}
+
+\subsection{Technologies utilisées}
+
+\begin{itemize}
+    \item \textbf{Python 3.10+} : Langage principal
+    \item \textbf{NumPy} : Calculs matriciels
+    \item \textbf{SciPy} : Décomposition spectrale de $C$
+    \item \textbf{Streamlit} : Interface web interactive
+    \item \textbf{Plotly} : Visualisations interactives
+    \item \textbf{cec2017} : Benchmark officiel
+\end{itemize}
+
+% ============================================================================
+% CONCLUSION
+% ============================================================================
+\newpage
+\section{Conclusion}
+
+\subsection{Ce qu'il faut retenir}
+
+\begin{enumerate}
+    \item \textbf{CMA-ES} est un algorithme d'optimisation qui apprend la géométrie du problème
+    \item Il utilise 3 composantes : moyenne $m$, step-size $\sigma$, covariance $C$
+    \item Il s'adapte \textbf{automatiquement} sans réglage manuel
+    \item Il excelle en \textbf{haute dimension} et sur les fonctions \textbf{difficiles}
+    \item C'est l'état de l'art pour l'optimisation continue en boîte noire
+\end{enumerate}
+
+\subsection{Quand utiliser CMA-ES ?}
+
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Situation} & \textbf{CMA-ES recommandé ?} \\
+\hline
+Fonction continue, dimension $> 5$ & \textcolor{cmaesgreen}{\textbf{OUI}} \\
+Pas de gradient disponible & \textcolor{cmaesgreen}{\textbf{OUI}} \\
+Fonction bruitée & \textcolor{cmaesgreen}{\textbf{OUI}} \\
+Peu d'évaluations possibles ($< 100$) & \textcolor{red}{Non} \\
+Problème combinatoire (discret) & \textcolor{red}{Non} \\
+Dimension $> 1000$ & \textcolor{cmaesorange}{Possible mais coûteux} \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Formules essentielles à retenir}
+
+\begin{tcolorbox}[colback=blue!5, colframe=cmaesblue, title=Les 4 équations clés]
+\begin{align}
+\text{Génération :} \quad & x_k \sim m + \sigma \cdot \mathcal{N}(0, C) \\[0.3cm]
+\text{Moyenne :} \quad & m \leftarrow \sum_{i=1}^{\mu} w_i \, x_{i:\lambda} \\[0.3cm]
+\text{Step-size :} \quad & \sigma \leftarrow \sigma \cdot \exp\left(\frac{c_s}{d_s}\left(\frac{\|p_s\|}{\chi_n} - 1\right)\right) \\[0.3cm]
+\text{Covariance :} \quad & C \leftarrow (1-c_1-c_\mu)C + c_1 p_c p_c^T + c_\mu \sum w_i y_i y_i^T
+\end{align}
+\end{tcolorbox}
+
+% ============================================================================
+% RÉFÉRENCES
+% ============================================================================
+\newpage
+\section*{Références}
+\addcontentsline{toc}{section}{Références}
+
+\begin{enumerate}
+    \item Hansen, N., \& Ostermeier, A. (2001). \textit{Completely Derandomized Self-Adaptation in Evolution Strategies}. Evolutionary Computation, 9(2), 159-195.
+    
+    \item Hansen, N. (2016). \textit{The CMA Evolution Strategy: A Tutorial}. arXiv:1604.00772.
+    
+    \item Awad, N. H., et al. (2017). \textit{Problem Definitions and Evaluation Criteria for the CEC 2017 Special Session on Single Objective Real-Parameter Numerical Optimization}.
+    
+    \item \url{https://github.com/tilleyd/cec2017-py} - Implémentation officielle CEC2017.
+\end{enumerate}
+
+% ============================================================================
+% GLOSSAIRE
+% ============================================================================
+\section*{Glossaire}
+\addcontentsline{toc}{section}{Glossaire}
+
+\begin{description}
+    \item[Benchmark] Ensemble de fonctions de test standardisées
+    \item[Covariance] Mesure de la relation entre deux variables
+    \item[Dimension] Nombre de variables du problème ($n$)
+    \item[Exploitation] Chercher près des bonnes solutions connues
+    \item[Exploration] Chercher dans de nouvelles régions
+    \item[Fitness] Valeur de la fonction objectif (à minimiser)
+    \item[Génération] Une itération de l'algorithme
+    \item[Métaheuristique] Algorithme d'optimisation général et approximatif
+    \item[Multimodale] Fonction avec plusieurs minima locaux
+    \item[Optimum global] La meilleure solution possible
+    \item[Population] Ensemble de solutions candidates
+    \item[Step-size] Taille du pas de recherche ($\sigma$)
+    \item[Unimodale] Fonction avec un seul minimum
+\end{description}
+
+\end{document}
